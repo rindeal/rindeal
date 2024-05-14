@@ -4,7 +4,7 @@ set -eu
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
-RENDERER="${SCRIPT_DIR}/README.md-renderer.py"
+RENDERER="${SCRIPT_DIR}/jinja2-renderer.py"
 
 TEMPLATE_PATH="${SCRIPT_DIR}/README.md.jinja2"
 OUTPUT_PATH="${SCRIPT_DIR}/README.md"
