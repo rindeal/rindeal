@@ -28,7 +28,7 @@
         https://github.com/anuraghazra/github-readme-stats?tab=readme-ov-file#common-options
 #}
 
-{%- macro gist(alt, user, gistid) -%}
+{%- macro card_gist(alt, user, gistid) -%}
     {% set href = "https://gist.github.com/{}/{}".format(user, gistid) %}
     {% set base_src  = "https://github-readme-stats.vercel.app/api/gist?id={}&border_radius=20&cache_seconds=86400".format(gistid) %}
     {% set light_src = base_src ~ "&theme=light" %}
@@ -37,7 +37,7 @@
     {{- link_w_picture(alt, href, light_src, dark_src) -}}
 {%- endmacro -%}
 
-{%- macro github(user, repo) -%}
+{%- macro card_github(user, repo) -%}
     {% set alt  = "GitHub Repository {}/{}".format(user, repo) %}
     {% set href = "https://github.com/{}/{}".format(user, repo) %}
     {% set base_src  = "https://github-readme-stats.vercel.app/api/pin?username={}&repo={}&border_radius=20&cache_seconds=86400".format(user, repo) %}
@@ -67,9 +67,8 @@
     {{- shields_badge_url(badge, color="", style=style, ltext=ltext, lcolor=lcolor, logo=logo, logo_color=logo_color, cache=cache) -}}
 {%- endmacro -%}
 
-{%- macro social(alt, href, label, logo, logo_color_light='', logo_color_dark='') -%}
+{%- macro badge_social(alt, href, label, logo, logo_color_light='', logo_color_dark='') -%}
     {% set alt = alt ~ " Social" %}
-    {% set base_src  = "https://github-readme-stats.vercel.app/api/pin?username={}&repo={}&border_radius=20".format(user, repo) %}
     {% set base_kwargs = {
         "rtext": label,
         "logo": logo,
@@ -85,20 +84,20 @@
 
 {#- ------------------------------------------------------------------------------------------ -#}
 
-{{ gist("gsettings-array.py",           "rindeal", "c5786254410028f760ee2351d884a744") }}
-{{ gist("xkb-list-layouts-variants.sh", "rindeal", "1891455c258b22f3e31e1da8f9821c28") }}
-{{ github("rindeal", "Amalgamate") }}
+{{ card_gist("gsettings-array.py",           "rindeal", "c5786254410028f760ee2351d884a744") }}
+{{ card_gist("xkb-list-layouts-variants.sh", "rindeal", "1891455c258b22f3e31e1da8f9821c28") }}
+{{ card_github("rindeal", "Amalgamate") }}
 
 ---
 
 <p>
-  {{ social("GitHub", "https://github.com/rindeal", "GitHub", "github", logo_color_light="151515") | indent(2) }}
-  {{ social("Gist", "https://gist.github.com/rindeal", "Gist", "github", logo_color_light="151515") | indent(2) }}
-  {{ social("GitLab", "https://gitlab.com/rindeal", "GitLab", "gitlab") | indent(2) }}
-  {{ social("GitLab Namespace", "https://gitlab.com/rindeal-ns", "GitLab NS", "gitlab") | indent(2) }}
-  {{ social("Black Duck Open Hub", "https://openhub.net/accounts/rindeal", "Open Hub", openhub_logo) | indent(2) }}
-  {{ social("Stack Exchange", "https://meta.stackoverflow.com/users/2566213/rindeal", "Stack Exchange", "stackexchange") | indent(2) }}
-  {{ social("EasyEDA", "https://oshwlab.com/rindeal?tab=project", "EasyEDA", "easyeda") | indent(2) }}
+  {{ badge_social("GitHub", "https://github.com/rindeal", "GitHub", "github", logo_color_light="151515") | indent(2) }}
+  {{ badge_social("Gist", "https://gist.github.com/rindeal", "Gist", "github", logo_color_light="151515") | indent(2) }}
+  {{ badge_social("GitLab", "https://gitlab.com/rindeal", "GitLab", "gitlab") | indent(2) }}
+  {{ badge_social("GitLab Namespace", "https://gitlab.com/rindeal-ns", "GitLab NS", "gitlab") | indent(2) }}
+  {{ badge_social("Black Duck Open Hub", "https://openhub.net/accounts/rindeal", "Open Hub", openhub_logo) | indent(2) }}
+  {{ badge_social("Stack Exchange", "https://meta.stackoverflow.com/users/2566213/rindeal", "Stack Exchange", "stackexchange") | indent(2) }}
+  {{ badge_social("EasyEDA", "https://oshwlab.com/rindeal?tab=project", "EasyEDA", "easyeda", logo_color_light="151515") | indent(2) }}
 </p>
 
 <br>

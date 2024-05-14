@@ -126,7 +126,7 @@
         media="(prefers-color-scheme: dark)"
       />
       <source
-        srcset="https://img.shields.io/badge/EasyEDA-white?&style=for-the-badge&logo=easyeda"
+        srcset="https://img.shields.io/badge/EasyEDA-white?&style=for-the-badge&logo=easyeda&logoColor=151515"
         media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)"
       />
       <img />

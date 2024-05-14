@@ -2,7 +2,7 @@
 
 set -eu
 
-SCRIPT_DIR=( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 RENDERER="${SCRIPT_DIR}/README.md-renderer.py"
 
