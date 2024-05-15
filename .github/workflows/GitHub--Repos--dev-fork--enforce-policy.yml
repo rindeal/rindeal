@@ -16,7 +16,7 @@ jobs:
         cache: 'pip'
     - name: Install Deps
       run: |
-        pip install PyGithub==2.3.0
+        pip install PyGithub==2.3.0 loguru==0.7.2
 
     - name: Run script
       env:
