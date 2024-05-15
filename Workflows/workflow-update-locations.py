@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+# SPDX-FileCopyrightText:  ANNO DOMINI 2024  Jan Chren (rindeal)  <dev.rindeal(a)gmail.com>
+# SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only
+
 import sys
 
 assert sys.version_info >= (3, 10)
@@ -40,10 +43,10 @@ PREVENT_RELINK_ON_TARGET_MISMATCH = False
 PREVENT_RENAME_ON_WORKFLOW_CONFLICT = False
 """Prevent renaming the workflow file in case of a name conflict."""
 
-PREVENT_WORKFLOW_NAME_UPDATE = True
+PREVENT_WORKFLOW_NAME_UPDATE = False
 """Prevent updating the name inside the workflow file."""
 
-PREVENT_UNLINKING_UNKNOWN_WORKFLOWS = True
+PREVENT_UNLINKING_UNKNOWN_WORKFLOWS = False
 """Prevent unlinking workflow files that are not recognized by the whitelist."""
 #endregion Flags
 
@@ -109,7 +112,8 @@ class WorkflowLink(PosixPath):
                         "Neither the current nor the expected workfile exists! The link is completely messed up.",
                         f"Please point the link '{self}' to your workfile under '{GITHUB_WORKFLOWS_DIR}'.",
                         "",
-                        f"    ln -vfs '{GITHUB_WORKFLOWS_DIR}/YOUR_EXISTING_WORKFLOW_FILE.yml' '{self}'",
+                        f"    touch .github/workflows/foo.yml",
+                        f"    ln -vfs 'foo.yml' '{self}'",
                         "",
                         "Then re-run this script again, it will fix everything else.",
                     ]))
@@ -136,33 +140,41 @@ class WorkflowLink(PosixPath):
             logger.warning(f"File renamed successfully.")
     
     def relink(self):
-        logger.warning("Unlinking '{wfl}' -> '{wfl.target}'", wfl=self)
+        logger.warning("Operating on link '{}'", self)
+        logger.warning("Unlinking from target '{wfl.target}'", wfl=self)
         if not PREVENT_RELINK_ON_TARGET_MISMATCH:
             self.unlink()
             logger.warning("Unlinked successfully.")
-        logger.warning("Relinking '{wfl}' -> '{wfl.target_exp}'", wfl=self)
+        logger.warning("Relinking to target   '{wfl.target_exp}'", wfl=self)
         if not PREVENT_RELINK_ON_TARGET_MISMATCH:
             self.symlink_to(self.target_exp)
-            logger.warning("Symlinked successfully.")
+            logger.warning("Relinked successfully.")
     
     # keep the _pattern as hidden func param, it makes the compile() run only once
     def ensure_workflow_file_has_correct_name(self, _pattern = re.compile(r'''^(name:)[ \t]*(.*)''')):
         """Update the workflow name in the given file."""
-        new_name_quoted = f'"{self.wf_name_exp}"'
+        new_content = ''
         old_content = self.read_text()
-        old_name_match = _pattern.search(old_content)
-        if not old_name_match:
-            logger.error("No workflow name found in '{wfl.target}'", wfl=self)
-            return
-        old_name = old_name_match[2]
-        if new_name_quoted != old_name:
-            new_content = _pattern.sub(r'\1 ' + new_name_quoted, old_content)
-            diff = generate_unified_diff(old_content, new_content, self.wf_name_exp)
-            logger.warning("Updating workflow name in '{wfl.target}' from '{old}' to '{new}'",
-                           wfl=self, old=old_name, new=new_name_quoted)
+        new_name_quoted = f'"{self.wf_name_exp}"'
+        old_name_match  = _pattern.search(old_content)
+        
+        if old_name_match:
+            if old_name_match[2] != new_name_quoted:
+                new_content = _pattern.sub(r'\1 ' + new_name_quoted, old_content)
+            # else: name is correct
+        else:
+            logger.warning("No workflow name found in '{wfl.target}'.", wfl=self)
+            logger.warning("Prepending new line.", new_name_quoted)
+            new_content = f"name: {new_name_quoted}\n" + old_content
+
+        if new_content and new_content != old_content:
+            diff = generate_unified_diff(old_content, new_content, self.wf_filename_exp)
+            logger.warning("Updating workflow name in '{wfl.wf_filename}'", wfl=self)
+            logger.warning("  New name: `{}`", new_name_quoted)
             logger.debug("Diff:\n" + diff)
             if not PREVENT_WORKFLOW_NAME_UPDATE:
                 self.write_text(new_content)
+                logger.warning("File's content updated successfully.")
     
 #endregion Classes
 
@@ -222,10 +234,6 @@ def find_git_root(start_directory: Path = Path.cwd()) -> Path:
             return directory
     raise FileNotFoundError('Root directory with .git directory not found')
 
-def path_ends_with(path: Path, suffix: Path) -> bool:
-    """Check if the path ends with the given suffix."""
-    return path.parts[-len(suffix.parts):] == suffix.parts
-
 def generate_workflow_links(start_dir: Path) -> Generator[WorkflowLink, None, None]:
     """Generate paths to workflow files."""
     for root, _, files in os.walk(str(start_dir), followlinks=True):
@@ -237,7 +245,7 @@ def remove_bad_workflow_files(whitelist: Set[str]):
     """Remove files in the GITHUB_WORKFLOWS_DIR that are not on the whitelist."""
     for file in GITHUB_WORKFLOWS_DIR.iterdir():
         if file.name not in whitelist:
-            logger.warning(f"'{file}' not on whitelist. Unlinking.")
+            logger.warning(f"Unlinking '{file}' since it's not on the whitelist.")
             if not PREVENT_UNLINKING_UNKNOWN_WORKFLOWS:
                 file.unlink()
 

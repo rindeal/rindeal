@@ -23,7 +23,8 @@ def main() -> int | str:
         return 1
 
     os.unsetenv("GH_TOKEN")
-    print(f"::add-mask::{token}")
+    if os.getenv("GITHUB_ACTIONS"):
+        print(f"::add-mask::{token}")
 
     g = Github(token)
 

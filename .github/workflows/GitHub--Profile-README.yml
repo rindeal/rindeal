@@ -1,4 +1,4 @@
-name: Profile README Render
+name: "GitHub/Profile-README"
 
 on:
   workflow_dispatch:
