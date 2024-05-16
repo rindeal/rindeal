@@ -33,7 +33,7 @@ jobs:
         diff=$(git diff)
         if [[ -n $diff ]] ; then
           {
-            echo '### Diff'
+            echo '### :warning: Diff'
             echo '<details>'
             echo '<summary>'
             echo 'Diff output'
@@ -46,7 +46,7 @@ jobs:
             echo '</details>'
           } >> $GITHUB_STEP_SUMMARY
         else
-          echo '### No diff' >> $GITHUB_STEP_SUMMARY
+          echo '### :white_check_mark: No diff' >> $GITHUB_STEP_SUMMARY
         fi
 
     - name: Commit and push if it has changed
