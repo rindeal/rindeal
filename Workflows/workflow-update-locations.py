@@ -33,7 +33,6 @@ logger.add(
 #region Constants
 GITHUB_WORKFLOWS_DIR = Path(".github/workflows")
 MY_WORKFLOWS_DIR = Path("Workflows")
-WORKFLOW_FILENAME = "workflow.yml"
 #endregion Constants
 
 #region Flags
@@ -68,16 +67,6 @@ def generate_unified_diff(old_content: str, new_content: str, file_name: str) ->
     )
     return ''.join(list(difflines)).strip()
 
-def log_critical_error(title, description, commands, **kwargs):
-    desc_text = '\n'.join(description)
-    cmd_text = '\n'.join(f"{i+1}. {c}" for i, c in enumerate(commands))
-    logger.critical(f"{title}!\n"
-        f"{desc_text}\n\n"
-        "Fix this by running:\n"
-        f"{cmd_text}\n\n"
-        "'foo.yml' is a temporary filename. After running these commands, re-run this script.\n"
-        "The script will adjust the filename and make necessary fixes.",
-        **kwargs)
 
 def remove_bad_workflow_files(whitelist: Set[str]):
     """Remove files in the GITHUB_WORKFLOWS_DIR that are not on the whitelist."""
@@ -91,13 +80,17 @@ def remove_bad_workflow_files(whitelist: Set[str]):
 #region Classes
 class WorkflowLink(PosixPath):
     """A class representing workflow.yml symlink path."""
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if self.name != WORKFLOW_FILENAME:
-            raise ValueError(f"Invalid name: '{self.name}' != '{WORKFLOW_FILENAME}'")
-        
+
+    WORKFLOW_FILENAME = "workflow.yml"
+    WF_FILENAME_PATTERN = re.compile(r"^[a-zA-Z0-9_][a-zA-Z0-9_.-]*[a-zA-Z0-9_]$")
+
+    def __new__(cls, *args, **kwargs):
+        instance = super().__new__(cls, *args, **kwargs)
+        if instance.name != cls.WORKFLOW_FILENAME:
+            raise ValueError(f"Invalid file name: '{instance.name}', expected '{cls.WORKFLOW_FILENAME}'")
         # the link might be just a virtual path at this point,
         # so not further checks like self.is_symlink() are possible
+        return instance
 
     @property
     def target(self) -> Path:
@@ -134,7 +127,7 @@ class WorkflowLink(PosixPath):
         """The normalized path to the workflow file."""
         return self._get_wf_path_norm()
 
-    def _get_wf_name_norm_parts(self) -> Tuple[str]:
+    def _get_wf_name_norm_parts(self) -> Tuple[str, ...]:
         return self.relative_to(MY_WORKFLOWS_DIR).parent.parts
 
     def _get_wf_name_norm(self) -> str:
@@ -154,10 +147,74 @@ class WorkflowLink(PosixPath):
         return Path(os.path.relpath(str(self._get_wf_path_norm()), str(self.parent)))
 
     @classmethod
+    def is_str_valid_wf_filename(cls, filename: str) -> bool:
+        return cls.WF_FILENAME_PATTERN.match(filename) is not None
+    
+    def is_wf_filename_norm_valid(self) -> bool:
+        return self.is_str_valid_wf_filename(self.wf_filename_norm)
+    
+    def subpath_parts_are_valid(self) -> str | None:
+        for part in self._get_wf_name_norm_parts():
+            if not self.is_str_valid_wf_filename(part):
+                return part
+        return None
+
+    @classmethod
     def find_workflow_links(cls, start_dir: Path) -> Generator['WorkflowLink', None, None]:
         """Find paths to workflow links. Recursive, follows links."""
         for root, _, filenames in os.walk(str(start_dir), followlinks=True):
-            yield from (cls(root, f) for f in filenames if f == WORKFLOW_FILENAME)
+            yield from (cls(root, f) for f in filenames if f == cls.WORKFLOW_FILENAME)
+
+    @classmethod
+    def find_validate_and_fix_links(cls, start_dir: Path) -> list['WorkflowLink']:
+        """
+        Find all workflow links in the specified directory, validate them, and fix any issues found.
+
+        This method iterates over all workflow links in the specified directory, validates each link,
+        and attempts to fix any issues it encounters. A workflow link is considered valid if it is a symlink,
+        its filename adheres to the specified format, and it points to an existing workflow file.
+
+        Args:
+            start_dir (Path): The directory to start the search for workflow links.
+
+        Returns:
+            list[WorkflowLink]: A list of valid workflow links.
+        """
+        workflow_links = []
+        for workflow_link in cls.find_workflow_links(start_dir):
+            if workflow_link.validate_and_process_link():
+                workflow_links.append(workflow_link)
+        return workflow_links
+
+    def validate_and_process_link(self) -> bool:
+        """
+        Validate the workflow link and process it by ensuring it points to the correct target.
+
+        This method checks if the workflow link is a symlink and if it points to an existing file.
+        It also ensures that the link's filename and target are in the correct format. If any issues
+        are found, it attempts to fix them by relinking or renaming files as necessary.
+
+        Returns:
+            bool: True if the link is valid or has been fixed, False if it cannot be fixed.
+        """
+        logger.info("Processing '{wfl}'", wfl=self)
+
+        if not self.is_symlink():
+            _LogCrit.not_symlink(self)
+            return False
+
+        if (failing_part := self.subpath_parts_are_valid()) is not None:
+            _LogCrit.invalid_path(self, failing_part)
+            return False
+
+        target_exists = self.validate_and_fix_link()
+
+        if not target_exists:
+            _LogCrit.missing_workflow_filename(self)
+            return False
+
+        self._ensure_has_correct_name()
+        return True
 
     def validate_and_fix_link(self) -> bool:
         """
@@ -271,22 +328,24 @@ class WorkflowLink(PosixPath):
             if not PREVENT_EDIT_WORKFLOW_NAME:
                 self.write_text(new_content)
                 logger.warning("File's content updated successfully.")
-#endregion Classes
 
-#region Main function
-def main() -> int | str:
-    """Main function to process workflow files."""
-    project_root_dir = find_git_root().resolve()
-    logger.info("os.chdir('{dir}')", dir=project_root_dir)
-    os.chdir(str(project_root_dir))
 
-    gh_wf_filename_whitelist: Set[str] = set()
+class _LogCrit:
+    @staticmethod
+    def _log_format_1(title: str, description, commands, **kwargs):
+        desc_text = '\n'.join(description)
+        cmd_text = '\n'.join(f"{i+1}. {c}" for i, c in enumerate(commands))
+        logger.critical(f"{title}!\n"
+            f"{desc_text}\n\n"
+            "Fix this by running:\n"
+            f"{cmd_text}\n\n"
+            "'foo.yml' is a temporary filename. After running these commands, re-run this script.\n"
+            "The script will adjust the filename and make necessary fixes.",
+            **kwargs)
 
-    for workflow_link in WorkflowLink.find_workflow_links(MY_WORKFLOWS_DIR):
-        logger.info("Processing '{wfl}'", wfl=workflow_link)
-
-        if not workflow_link.is_symlink():
-            log_critical_error("Not a symlink",
+    @classmethod
+    def not_symlink(cls, workflow_link: WorkflowLink):
+        cls._log_format_1("Not a symlink",
                 (
                     "'{wfl}' isn't a symlink.",
                     "Each file under '{wf_dir}' must be a symlink to a file in '{gh_wf_dir}'.",
@@ -296,12 +355,10 @@ def main() -> int | str:
                 ),
                 wfl=workflow_link, gh_wf_dir=GITHUB_WORKFLOWS_DIR, wf_dir=MY_WORKFLOWS_DIR,
             )
-            continue
 
-        target_exists = workflow_link.validate_and_fix_link()
-
-        if not target_exists:
-            log_critical_error("Missing Workflow File",
+    @classmethod
+    def missing_workflow_filename(cls, workflow_link: WorkflowLink):
+        cls._log_format_1("Missing Workflow File",
                 (
                     "The link '{wfl}' doesn't point to an existing file.",
                     "The link must target a valid file in '{gh_wf_dir}'.",
@@ -311,11 +368,36 @@ def main() -> int | str:
                 ),
                 wfl=workflow_link, gh_wf_dir=GITHUB_WORKFLOWS_DIR, wf_dir=MY_WORKFLOWS_DIR,
             )
-            continue
+        
+    @classmethod
+    def invalid_path(cls, workflow_link: WorkflowLink, failing_part: str):
+        logger.critical("Invalid path!\n"
+                "Invalid part in workflow link: '{fail}'.\n"
+                "Ensure each part adheres to the following conventions:\n"
+                "- Contains only:\n"
+                "  - Alphanumeric characters: A-Z, a-z, 0-9\n"
+                "  - Underscores (_)\n"
+                "  - Hyphens (-)\n"
+                "  - Periods (.)\n"
+                "- Does not start or end with:\n"
+                "  - Dash (-)\n"
+                "  - Dot (.)\n"
+                "\n"
+                "Examples of a valid path part:\n"
+                "  - 'example_part-1.2_three'"
+                , fail=failing_part,
+            )
+#endregion Classes
 
-        workflow_link._ensure_has_correct_name()
+#region Main function
+def main() -> int | str:
+    """Main function to process workflow files."""
+    project_root_dir = find_git_root().resolve()
+    logger.info("os.chdir('{dir}')", dir=project_root_dir)
+    os.chdir(str(project_root_dir))
 
-        gh_wf_filename_whitelist.add(workflow_link.wf_filename)
+    workflow_links = WorkflowLink.find_validate_and_fix_links(MY_WORKFLOWS_DIR)
+    gh_wf_filename_whitelist = {link.wf_filename for link in workflow_links}
 
     logger.debug("GitHub Workflow Filename Whitelist:")
     for filename in gh_wf_filename_whitelist:
