@@ -37,17 +37,17 @@ WORKFLOW_FILENAME = "workflow.yml"
 #endregion Constants
 
 #region Flags
-PREVENT_RELINK_ON_TARGET_MISMATCH = False
-"""Prevent relinking the workflow file if the target path does not match the expected path."""
+PREVENT_RELINK_TARGET = False
+"""Prevent relinking the target of the workflow link, in case it's incorrect."""
 
-PREVENT_RENAME_ON_WORKFLOW_CONFLICT = False
-"""Prevent renaming the workflow file in case of a name conflict."""
+PREVENT_RENAME_OF_WORKFLOW_FILE = False
+"""Prevent renaming the workflow file in case it doesn't follow the proper format."""
 
-PREVENT_WORKFLOW_NAME_MODIFICATION = False
-"""Prevent modifications to the workflow name within the workflow file."""
+PREVENT_EDIT_WORKFLOW_NAME = False
+"""Prevent editing the `name:` key in the workflow yaml file."""
 
-PREVENT_UNLINKING_NON_WHITELISTED_WORKFLOWS = False
-"""Prevent unlinking workflow files that are not recognized by the whitelist."""
+PREVENT_UNLINK_UNRECOGNIZED_WORKFLOW_FILES = False
+"""Prevent unlinking files that are not recognized by the generated whitelist."""
 #endregion Flags
 
 #region Helper functions
@@ -68,151 +68,182 @@ def generate_unified_diff(old_content: str, new_content: str, file_name: str) ->
     )
     return ''.join(list(difflines)).strip()
 
+def log_critical_error(title, description, commands, **kwargs):
+    desc_text = '\n'.join(description)
+    cmd_text = '\n'.join(f"{i+1}. {c}" for i, c in enumerate(commands))
+    logger.critical(f"{title}!\n"
+        f"{desc_text}\n\n"
+        "Fix this by running:\n"
+        f"{cmd_text}\n\n"
+        "'foo.yml' is a temporary filename. After running these commands, re-run this script.\n"
+        "The script will adjust the filename and make necessary fixes.",
+        **kwargs)
+
 def remove_bad_workflow_files(whitelist: Set[str]):
     """Remove files in the GITHUB_WORKFLOWS_DIR that are not on the whitelist."""
     for file in GITHUB_WORKFLOWS_DIR.iterdir():
         if file.name not in whitelist:
             logger.warning(f"Unlinking '{file}' since it's not on the whitelist.")
-            if not PREVENT_UNLINKING_NON_WHITELISTED_WORKFLOWS:
+            if not PREVENT_UNLINK_UNRECOGNIZED_WORKFLOW_FILES:
                 file.unlink()
 #endregion Helper Functions
 
 #region Classes
 class WorkflowLink(PosixPath):
-    """A class representing a symbolic link to a workflow file."""
+    """A class representing workflow.yml symlink path."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.name != WORKFLOW_FILENAME:
+            raise ValueError(f"Invalid name: '{self.name}' != '{WORKFLOW_FILENAME}'")
+        
+        # the link might be just a virtual path at this point,
+        # so not further checks like self.is_symlink() are possible
+
     @property
     def target(self) -> Path:
-        """The actual target file that the symlink points to."""
+        """Path to which the link points to."""
         return self.readlink()
 
     @property
-    def target_exp(self) -> Path:
-        """The expected target file based on the workflow's expected path."""
-        return self._get_target_exp()
+    def target_norm(self) -> Path:
+        """Path to which the link should point to."""
+        return self._get_target_norm()
 
     @property
-    def wf_name_exp_parts(self) -> Tuple[str]:
-        """Parts of the expected workflow's name."""
-        return self._get_wf_name_exp_parts()
-
-    @property
-    def wf_name_exp(self) -> str:
-        """The expected full name of the workflow."""
-        return self._get_wf_name_exp()
+    def wf_name_norm(self) -> str:
+        """The normalized full name of the workflow."""
+        return self._get_wf_name_norm()
 
     @property
     def wf_filename(self) -> str:
-        """The filename of the workflow file."""
+        """The filename of the workflow file, the symlink currently points to."""
         return self.target.name
 
     @property
-    def wf_filename_exp(self) -> str:
-        """The expected filename of the workflow file."""
-        return self._get_wf_filename_exp()
+    def wf_filename_norm(self) -> str:
+        """The normalized filename of the workflow file."""
+        return self._get_wf_filename_norm()
 
     @property
     def wf_path(self) -> Path:
-        """The current path to the workflow file, relative to projects root dir."""
+        """The path of the workflow file the link points to."""
         return self._get_wf_path()
 
     @property
-    def wf_path_exp(self) -> Path:
-        """The expected path to the workflow file relative to projects root dir"""
-        return self._get_wf_path_exp()
+    def wf_path_norm(self) -> Path:
+        """The normalized path to the workflow file."""
+        return self._get_wf_path_norm()
 
-    def _get_wf_name_exp_parts(self) -> Tuple[str]:
+    def _get_wf_name_norm_parts(self) -> Tuple[str]:
         return self.relative_to(MY_WORKFLOWS_DIR).parent.parts
 
-    def _get_wf_name_exp(self) -> str:
-        return "/".join(self._get_wf_name_exp_parts())
+    def _get_wf_name_norm(self) -> str:
+        return "/".join(self._get_wf_name_norm_parts())
 
-    def _get_wf_filename_exp(self) -> str:
-        return "--".join(self._get_wf_name_exp_parts()) + ".yml"
+    def _get_wf_filename_norm(self) -> str:
+        return "--".join(self._get_wf_name_norm_parts()) + ".yml"
 
     def _get_wf_path(self) -> Path:
         return GITHUB_WORKFLOWS_DIR / self.target.name
 
-    def _get_wf_path_exp(self) -> Path:
-        return GITHUB_WORKFLOWS_DIR / self._get_wf_filename_exp()
+    def _get_wf_path_norm(self) -> Path:
+        return GITHUB_WORKFLOWS_DIR / self._get_wf_filename_norm()
 
-    def _get_target_exp(self) -> Path:
+    def _get_target_norm(self) -> Path:
         # use `os.path.relpath()` here because `Path.realtive_to()` requires the other path to be subpath
-        return Path(os.path.relpath(str(self._get_wf_path_exp()), str(self.parent)))
+        return Path(os.path.relpath(str(self._get_wf_path_norm()), str(self.parent)))
 
     @classmethod
-    def generate_workflow_links(cls, start_dir: Path) -> Generator['WorkflowLink', None, None]:
-        """Generate paths to workflow files."""
-        for root, _, files in os.walk(str(start_dir), followlinks=True):
-            for filename in files:
-                if filename == WORKFLOW_FILENAME:
-                    yield cls(root, filename)
+    def find_workflow_links(cls, start_dir: Path) -> Generator['WorkflowLink', None, None]:
+        """Find paths to workflow links. Recursive, follows links."""
+        for root, _, filenames in os.walk(str(start_dir), followlinks=True):
+            yield from (cls(root, f) for f in filenames if f == WORKFLOW_FILENAME)
 
-    def ensure_correct_target(self):
+    def validate_and_fix_link(self) -> bool:
         """
-        Validate and rectify the symlink's target for the workflow file.
+        Validates the symbolic link and fixes it if necessary.
 
-        This method ensures the symlink points to the correct workflow file. If the current target is incorrect or missing,
-        it attempts to correct the link by updating the symlink to point to the expected file and renaming the file if necessary.
+        This method checks if the symbolic link points to an existing workflow file.
+        - If not, it attempts to fix the link by pointing it to a normalized workflow filename
+            if it exists.
+        - If the link points to a filename in an unknown format, it renames the workflow file
+            to a normalized filename and updates the link.
+        - If the link points to a normalized filename but the target is incorrect,
+            it updates the link to point to the correct target.
+
+        Returns:
+            True: If the link was invalid and has been fixed, or if the link
+                was valid and no action was needed.
+            False: If the link was invalid and could not be fixed due to
+                insufficient information.
         """
         if not self.wf_path.is_file():
-            if not self.wf_path_exp.is_file():
-                logger.critical("\n".join([
-                        "Neither the current nor the expected workfile exists! The link is completely messed up.",
-                        "Please point the link '{wfl}' to your workfile under '{GITHUB_WORKFLOWS_DIR}'.",
-                        "",
-                        "    touch .github/workflows/foo.yml",
-                        "    ln -vfs 'foo.yml' '{wfl}'",
-                        "",
-                        "Then re-run this script again, it will fix everything else.",
-                    ]), wfl=self, GITHUB_WORKFLOWS_DIR=GITHUB_WORKFLOWS_DIR)
-                return
+            if not self.wf_path_norm.is_file():
+                # At this point:
+                #     - the link points to a filename with no matching workflow file
+                #     - normalized workflow filename doesn't exist as well
+                #     - we can't infer enough information to proceed further
+                return False
             logger.warning("Non-existing workfile link: '{wfp.wf_filename}'.", wfp=self)
-            logger.warning("Correct workfile exists at: '{wfp.wf_filename_exp}'.", wfp=self)
+            logger.warning("Correct workfile exists at: '{wfp.wf_filename_norm}'.", wfp=self)
             logger.warning("Relinking.")
-            self.relink_target()
-            return
+            self._relink_to_target_norm()
+            return True
 
-        if self.wf_filename != self.wf_filename_exp:
+        # At this point:
+        #     - the link points to a filename in an unknown format
+        #     - workflow with such a filename exists
+
+        if self.wf_filename != self.wf_filename_norm:
             logger.warning(f"The target filename exists in '{GITHUB_WORKFLOWS_DIR}', but has wrong format.")
-            self.fix_target_filename()
+            self._normalize_wf_filename()
+            self._relink_to_target_norm()
+            return True
 
-        if self.target != self.target_exp:
+        # At this point:
+        #     - the link points to a normalized filename
+        #     - workflow with such a filename exists
+
+        if self.target != self.target_norm:
             logger.warning("Link's parent levels seem to be wrong. Relinking.")
-            logger.warning("  Current target  '{wfl.target}'", wfl=self)
-            logger.warning("  Expected target '{wfl.target_exp}'", wfl=self)
-            self.relink_target()
+            logger.warning("  Existing target:   '{wfl.target}'", wfl=self)
+            logger.warning("  Normalized target: '{wfl.target_norm}'", wfl=self)
+            self._relink_to_target_norm()
+            return True
 
-    def fix_target_filename(self):
-        """
-        Rename the workflow file in the GitHub workflows directory to match the expected format.
+        # At this point:
+        #     - the link passed all checks
 
-        If the target filename of the workflow file does not match the expected format, this method renames it
-        within the GitHub workflows directory to conform to the naming convention.
+        return True
+
+    def _normalize_wf_filename(self):
         """
-        logger.warning("Renaming '{wfl.wf_filename}' -> '{wfl.wf_filename_exp}'", wfl=self)
-        if not PREVENT_RENAME_ON_WORKFLOW_CONFLICT:
-            self.wf_path.rename(self.wf_path_exp)
+        Ensures the workflow file name adheres to the normalized format.
+
+        This method renames the workflow file in the GitHub workflows directory
+            if its current name deviates from the normalized naming convention.
+        """
+        logger.warning("Renaming '{wfl.wf_filename}' -> '{wfl.wf_filename_norm}'", wfl=self)
+        if not PREVENT_RENAME_OF_WORKFLOW_FILE:
+            self.wf_path.rename(self.wf_path_norm)
             logger.warning(f"File renamed successfully.")
 
-    def relink_target(self):
+    def _relink_to_target_norm(self):
         """
-        Update the symlink to point to the expected target file.
-
-        This method unlinks the current target and creates a new symlink to the expected target file, ensuring
-        that the symlink reflects the correct file structure.
+        Rewrites the symlink to point to a normalized worfkflow filename.
         """
         logger.warning("Operating on link '{}'", self)
         logger.warning("Unlinking from target '{wfl.target}'", wfl=self)
-        if not PREVENT_RELINK_ON_TARGET_MISMATCH:
+        if not PREVENT_RELINK_TARGET:
             self.unlink()
             logger.warning("Unlinked successfully.")
-        logger.warning("Relinking to target   '{wfl.target_exp}'", wfl=self)
-        if not PREVENT_RELINK_ON_TARGET_MISMATCH:
-            self.symlink_to(self.target_exp)
+        logger.warning("Relinking to target   '{wfl.target_norm}'", wfl=self)
+        if not PREVENT_RELINK_TARGET:
+            self.symlink_to(self.target_norm)
             logger.warning("Relinked successfully.")
 
     # keep the _pattern as hidden func param, it makes the compile() run only once
-    def ensure_correct_workflow_name(self, _pattern = re.compile(r'''^(name:)[ \t]*(.*)''')):
+    def _ensure_has_correct_name(self, _pattern = re.compile(r'''^(name:)[ \t]*(.*)''')):
         """
         Ensure the workflow file has the correct name within its content.
 
@@ -220,7 +251,7 @@ class WorkflowLink(PosixPath):
         """
         new_content = ''
         old_content = self.read_text()
-        new_name_quoted = f'"{self.wf_name_exp}"'
+        new_name_quoted = f'"{self.wf_name_norm}"'
         old_name_match  = _pattern.search(old_content)
 
         if old_name_match:
@@ -233,11 +264,11 @@ class WorkflowLink(PosixPath):
             new_content = f"name: {new_name_quoted}\n" + old_content
 
         if new_content and new_content != old_content:
-            diff = generate_unified_diff(old_content, new_content, self.wf_filename_exp)
+            diff = generate_unified_diff(old_content, new_content, self.wf_filename_norm)
             logger.warning("Updating workflow name in '{wfl.wf_filename}'", wfl=self)
             logger.warning("  New name: `{}`", new_name_quoted)
             logger.debug("Diff:\n" + diff)
-            if not PREVENT_WORKFLOW_NAME_MODIFICATION:
+            if not PREVENT_EDIT_WORKFLOW_NAME:
                 self.write_text(new_content)
                 logger.warning("File's content updated successfully.")
 #endregion Classes
@@ -251,17 +282,38 @@ def main() -> int | str:
 
     gh_wf_filename_whitelist: Set[str] = set()
 
-    for workflow_link in WorkflowLink.generate_workflow_links(MY_WORKFLOWS_DIR):
+    for workflow_link in WorkflowLink.find_workflow_links(MY_WORKFLOWS_DIR):
         logger.info("Processing '{wfl}'", wfl=workflow_link)
 
         if not workflow_link.is_symlink():
-            logger.critical("{wf_fn} is not a symlink: '{wfl}'. Ignoring!",
-                            wfl=workflow_link, wf_fn=WORKFLOW_FILENAME)
+            log_critical_error("Not a symlink",
+                (
+                    "'{wfl}' isn't a symlink.",
+                    "Each file under '{wf_dir}' must be a symlink to a file in '{gh_wf_dir}'.",
+                ), (
+                    "cp -v '{wfl}' '{gh_wf_dir}/foo.yml'",
+                    "ln -vs 'foo.yml' '{wfl}'",
+                ),
+                wfl=workflow_link, gh_wf_dir=GITHUB_WORKFLOWS_DIR, wf_dir=MY_WORKFLOWS_DIR,
+            )
             continue
 
-        workflow_link.ensure_correct_target()
+        target_exists = workflow_link.validate_and_fix_link()
 
-        workflow_link.ensure_correct_workflow_name()
+        if not target_exists:
+            log_critical_error("Missing Workflow File",
+                (
+                    "The link '{wfl}' doesn't point to an existing file.",
+                    "The link must target a valid file in '{gh_wf_dir}'.",
+                ), (
+                    "touch '{gh_wf_dir}/foo.yml'",
+                    "ln -vfs '{gh_wf_dir}/foo.yml' '{wfl}'"
+                ),
+                wfl=workflow_link, gh_wf_dir=GITHUB_WORKFLOWS_DIR, wf_dir=MY_WORKFLOWS_DIR,
+            )
+            continue
+
+        workflow_link._ensure_has_correct_name()
 
         gh_wf_filename_whitelist.add(workflow_link.wf_filename)
 
