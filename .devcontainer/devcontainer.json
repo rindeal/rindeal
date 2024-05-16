@@ -11,6 +11,7 @@
         "VisualStudioExptTeam.vscodeintellicode"
       ],
       "settings": {
+        "editor.fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Menlo, Consolas, \"Liberation Mono\", monospace",
         "editor.renderWhitespace": "boundary"
       }
     }
