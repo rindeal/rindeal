@@ -96,11 +96,11 @@
   <a alt="Black Duck Open Hub Social" href="https://openhub.net/accounts/rindeal">
     <picture>
       <source
-        srcset="https://img.shields.io/badge/Open%20Hub-151515?&style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxOSAxMyI+PHRleHQgeT0iMTIiIGZpbGw9IiM1YTJhODEiIGZvbnQtZmFtaWx5PSJOaW1idXMgU2FucyBOYXJyb3ciIGZvbnQtd2VpZ2h0PSI4MDAiPk9IPC90ZXh0Pjwvc3ZnPg=="
+        srcset="https://img.shields.io/badge/Open%20Hub-151515?&style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxOSAxMyI+PHRleHQgeT0iMTIiIGZpbGw9IiM1YTJhODEiIGZvbnQtZmFtaWx5PSJOaW1idXMgU2FucyBOYXJyb3ciIGZvbnQtd2VpZ2h0PSI4MDAiPk9IPC90ZXh0Pjwvc3ZnPg=="
         media="(prefers-color-scheme: dark)"
       />
       <source
-        srcset="https://img.shields.io/badge/Open%20Hub-white?&style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxOSAxMyI+PHRleHQgeT0iMTIiIGZpbGw9IiM1YTJhODEiIGZvbnQtZmFtaWx5PSJOaW1idXMgU2FucyBOYXJyb3ciIGZvbnQtd2VpZ2h0PSI4MDAiPk9IPC90ZXh0Pjwvc3ZnPg=="
+        srcset="https://img.shields.io/badge/Open%20Hub-white?&style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxOSAxMyI+PHRleHQgeT0iMTIiIGZpbGw9IiM1YTJhODEiIGZvbnQtZmFtaWx5PSJOaW1idXMgU2FucyBOYXJyb3ciIGZvbnQtd2VpZ2h0PSI4MDAiPk9IPC90ZXh0Pjwvc3ZnPg=="
         media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)"
       />
       <img />
