@@ -8,26 +8,82 @@ import sys
 assert sys.version_info >= (3, 10)
 
 import difflib
+import logging
 import os
 import re
 from pathlib import Path, PosixPath
-from typing import Generator, Set, Tuple
-
-
-from loguru import logger
+from typing import Generator
 
 
 #region Setup Logging
-logger.remove()
-logger.add(
-    sys.stderr,
-    format=" | ".join([
-        "<green>{time:HH:mm:ss.SSS}</green>",
-        "<level>{level: <8}</level>",
-        "<cyan>{function}:{line}</cyan> - <level>{message}</level>",
-    ]),
-    colorize=True
-)
+class CustomFormatter(logging.Formatter):
+    NORMAL = "\x1b[0m"
+    BLACK = "\x1b[30;21m"
+    RED = "\x1b[31;21m"
+    GREEN = "\x1b[32;21m"
+    YELLOW = "\x1b[33;21m"
+    BLUE = "\x1b[34;21m"
+    MAGENTA = "\x1b[35;21m"
+    CYAN = "\x1b[36;21m"
+    WHITE = "\x1b[37;21m"
+    GREY = "\x1b[38;21m"
+    RESET = "\x1b[0m"
+    BOLD_RED = "\x1b[31;1m"
+    BOLD_GREEN = "\x1b[32;1m"
+    BOLD_YELLOW = "\x1b[33;1m"
+    BOLD_BLUE = "\x1b[34;1m"
+    BOLD_MAGENTA = "\x1b[35;1m"
+    BOLD_CYAN = "\x1b[36;1m"
+    BOLD_WHITE = "\x1b[37;1m"
+    BG_BLACK = "\x1b[40m"
+    BG_RED = "\x1b[41m"
+    BG_GREEN = "\x1b[42m"
+    BG_YELLOW = "\x1b[43m"
+    BG_BLUE = "\x1b[44m"
+    BG_MAGENTA = "\x1b[45m"
+    BG_CYAN = "\x1b[46m"
+    BG_WHITE = "\x1b[47m"
+
+    def __init__(self, fmt=None, datefmt=None, colorize=True):
+        super().__init__()
+        self.colorize = colorize
+
+    def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
+        seconds_since_midnight = int(record.created) % 86400
+        milliseconds = int((record.created - int(record.created)) * 1000)
+        return f"{seconds_since_midnight}.{milliseconds:03d}"
+
+    def format(self, record):
+        time_format = "%(asctime)s"
+        level_format = "%(levelname)-8s"
+        location_format = "%(funcName)s:%(lineno)d"
+        message_format = "%(message)s"
+        if self.colorize:
+            def level_color(fmt: str) -> str:
+                return {
+                    logging.DEBUG: self.BLUE + fmt + self.RESET,
+                    logging.INFO: self.NORMAL + fmt + self.RESET,
+                    logging.WARNING: self.YELLOW + fmt + self.RESET,
+                    logging.ERROR: self.RED + fmt + self.RESET,
+                    logging.CRITICAL: self.BG_RED + self.WHITE + fmt + self.RESET
+                }.get(record.levelno)
+            time_format = self.GREEN + time_format + self.RESET
+            level_format = level_color(level_format)
+            location_format = self.CYAN + location_format + self.RESET
+            message_format = level_color(message_format)
+        format_string = " | ".join([time_format, level_format, location_format, message_format])
+        format_string = f"{time_format} {level_format} at {location_format} - {message_format}"
+        formatter = logging.Formatter(format_string)
+        formatter.formatTime = self.formatTime
+        return formatter.format(record)
+
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
+ch = logging.StreamHandler(sys.stderr)
+ch.setLevel(logging.DEBUG)
+ch.setFormatter(CustomFormatter(colorize=True))
+logger.addHandler(ch)
+del ch
 #endregion Setup Logging
 
 #region Constants
@@ -68,7 +124,7 @@ def generate_unified_diff(old_content: str, new_content: str, file_name: str) ->
     return ''.join(list(difflines)).strip()
 
 
-def remove_bad_workflow_files(whitelist: Set[str]):
+def remove_bad_workflow_files(whitelist: set[str]):
     """Remove files in the GITHUB_WORKFLOWS_DIR that are not on the whitelist."""
     for file in GITHUB_WORKFLOWS_DIR.iterdir():
         if file.name not in whitelist:
@@ -127,7 +183,7 @@ class WorkflowLink(PosixPath):
         """The normalized path to the workflow file."""
         return self._get_wf_path_norm()
 
-    def _get_wf_name_norm_parts(self) -> Tuple[str, ...]:
+    def _get_wf_name_norm_parts(self) -> tuple[str, ...]:
         return self.relative_to(MY_WORKFLOWS_DIR).parent.parts
 
     def _get_wf_name_norm(self) -> str:
@@ -197,7 +253,7 @@ class WorkflowLink(PosixPath):
         Returns:
             bool: True if the link is valid or has been fixed, False if it cannot be fixed.
         """
-        logger.info("Processing '{wfl}'", wfl=self)
+        logger.info(f"Processing '{self}'")
 
         if not self.is_symlink():
             _LogCrit.not_symlink(self)
@@ -241,8 +297,8 @@ class WorkflowLink(PosixPath):
                 #     - normalized workflow filename doesn't exist as well
                 #     - we can't infer enough information to proceed further
                 return False
-            logger.warning("Non-existing workfile link: '{wfp.wf_filename}'.", wfp=self)
-            logger.warning("Correct workfile exists at: '{wfp.wf_filename_norm}'.", wfp=self)
+            logger.warning(f"Non-existing workfile link: '{self.wf_filename}'.")
+            logger.warning(f"Correct workfile exists at: '{self.wf_filename_norm}'.")
             logger.warning("Relinking.")
             self._relink_to_target_norm()
             return True
@@ -263,8 +319,8 @@ class WorkflowLink(PosixPath):
 
         if self.target != self.target_norm:
             logger.warning("Link's parent levels seem to be wrong. Relinking.")
-            logger.warning("  Existing target:   '{wfl.target}'", wfl=self)
-            logger.warning("  Normalized target: '{wfl.target_norm}'", wfl=self)
+            logger.warning(f"  Existing target:   '{self.target}'")
+            logger.warning(f"  Normalized target: '{self.target_norm}'")
             self._relink_to_target_norm()
             return True
 
@@ -280,21 +336,21 @@ class WorkflowLink(PosixPath):
         This method renames the workflow file in the GitHub workflows directory
             if its current name deviates from the normalized naming convention.
         """
-        logger.warning("Renaming '{wfl.wf_filename}' -> '{wfl.wf_filename_norm}'", wfl=self)
+        logger.warning(f"Renaming '{self.wf_filename}' -> '{self.wf_filename_norm}'")
         if not PREVENT_RENAME_OF_WORKFLOW_FILE:
             self.wf_path.rename(self.wf_path_norm)
-            logger.warning(f"File renamed successfully.")
+            logger.warning("File renamed successfully.")
 
     def _relink_to_target_norm(self):
         """
         Rewrites the symlink to point to a normalized worfkflow filename.
         """
-        logger.warning("Operating on link '{}'", self)
-        logger.warning("Unlinking from target '{wfl.target}'", wfl=self)
+        logger.warning(f"Operating on link '{self}'")
+        logger.warning(f"Unlinking from target '{self.target}'")
         if not PREVENT_RELINK_TARGET:
             self.unlink()
             logger.warning("Unlinked successfully.")
-        logger.warning("Relinking to target   '{wfl.target_norm}'", wfl=self)
+        logger.warning(f"Relinking to target   '{self.target_norm}'")
         if not PREVENT_RELINK_TARGET:
             self.symlink_to(self.target_norm)
             logger.warning("Relinked successfully.")
@@ -316,15 +372,15 @@ class WorkflowLink(PosixPath):
                 new_content = _pattern.sub(r'\1 ' + new_name_quoted, old_content)
             # else: name is correct
         else:
-            logger.warning("No workflow name found in '{wfl.target}'.", wfl=self)
-            logger.warning("Prepending new line.", new_name_quoted)
+            logger.warning(f"No workflow name found in '{self.target}'.")
+            logger.warning(f"Prepending new line. {new_name_quoted}")
             new_content = f"name: {new_name_quoted}\n" + old_content
 
         if new_content and new_content != old_content:
             diff = generate_unified_diff(old_content, new_content, self.wf_filename_norm)
-            logger.warning("Updating workflow name in '{wfl.wf_filename}'", wfl=self)
-            logger.warning("  New name: `{}`", new_name_quoted)
-            logger.debug("Diff:\n" + diff)
+            logger.warning(f"Updating workflow name in '{self.wf_filename}'")
+            logger.warning(f"  New name: `{new_name_quoted}`")
+            logger.debug("Diff:\n%s", diff)
             if not PREVENT_EDIT_WORKFLOW_NAME:
                 self.write_text(new_content)
                 logger.warning("File's content updated successfully.")
@@ -347,11 +403,11 @@ class _LogCrit:
     def not_symlink(cls, workflow_link: WorkflowLink):
         cls._log_format_1("Not a symlink",
                 (
-                    "'{wfl}' isn't a symlink.",
-                    "Each file under '{wf_dir}' must be a symlink to a file in '{gh_wf_dir}'.",
+                    "'%(wfl)s' isn't a symlink.",
+                    "Each file under '%(wf_dir)' must be a symlink to a file in '%(gh_wf_dir)'.",
                 ), (
-                    "cp -v '{wfl}' '{gh_wf_dir}/foo.yml'",
-                    "ln -vs 'foo.yml' '{wfl}'",
+                    "cp -v '%(wfl)s' '%(gh_wf_dir)/foo.yml'",
+                    "ln -vs 'foo.yml' '%(wfl)s'",
                 ),
                 wfl=workflow_link, gh_wf_dir=GITHUB_WORKFLOWS_DIR, wf_dir=MY_WORKFLOWS_DIR,
             )
@@ -360,11 +416,11 @@ class _LogCrit:
     def missing_workflow_filename(cls, workflow_link: WorkflowLink):
         cls._log_format_1("Missing Workflow File",
                 (
-                    "The link '{wfl}' doesn't point to an existing file.",
-                    "The link must target a valid file in '{gh_wf_dir}'.",
+                    "The link '%(wfl)s' doesn't point to an existing file.",
+                    "The link must target a valid file in '%(gh_wf_dir)'.",
                 ), (
-                    "touch '{gh_wf_dir}/foo.yml'",
-                    "ln -vfs '{gh_wf_dir}/foo.yml' '{wfl}'"
+                    "touch '%(gh_wf_dir)/foo.yml'",
+                    "ln -vfs '%(gh_wf_dir)/foo.yml' '%(wfl)s'"
                 ),
                 wfl=workflow_link, gh_wf_dir=GITHUB_WORKFLOWS_DIR, wf_dir=MY_WORKFLOWS_DIR,
             )
@@ -372,7 +428,7 @@ class _LogCrit:
     @classmethod
     def invalid_path(cls, workflow_link: WorkflowLink, failing_part: str):
         logger.critical("Invalid path!\n"
-                "Invalid part in workflow link: '{fail}'.\n"
+                f"Invalid part in workflow link: '{failing_part}'.\n"
                 "Ensure each part adheres to the following conventions:\n"
                 "- Contains only:\n"
                 "  - Alphanumeric characters: A-Z, a-z, 0-9\n"
@@ -385,7 +441,6 @@ class _LogCrit:
                 "\n"
                 "Examples of a valid path part:\n"
                 "  - 'example_part-1.2_three'"
-                , fail=failing_part,
             )
 #endregion Classes
 
@@ -393,7 +448,7 @@ class _LogCrit:
 def main() -> int | str:
     """Main function to process workflow files."""
     project_root_dir = find_git_root().resolve()
-    logger.info("os.chdir('{dir}')", dir=project_root_dir)
+    logger.info(f"Changing working directory to project root '{project_root_dir}'")
     os.chdir(str(project_root_dir))
 
     workflow_links = WorkflowLink.find_validate_and_fix_links(MY_WORKFLOWS_DIR)
@@ -401,7 +456,7 @@ def main() -> int | str:
 
     logger.debug("GitHub Workflow Filename Whitelist:")
     for filename in gh_wf_filename_whitelist:
-        logger.debug("    '{}'", filename)
+        logger.debug(f"    '{filename}'")
 
     remove_bad_workflow_files(gh_wf_filename_whitelist)
 
