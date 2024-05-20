@@ -3,8 +3,8 @@ name: "GitHub/Profile-README"
 on:
   workflow_dispatch:
   push:
-    branches:
-      - master
+    paths:
+    - 'README.md.jinja2'
 
 jobs:
   README-render:
