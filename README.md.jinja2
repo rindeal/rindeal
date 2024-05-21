@@ -36,6 +36,9 @@
 
     {{- link_w_picture(alt, href, light_src, dark_src) -}}
 {%- endmacro -%}
+{%- macro my_card_gist(alt, gistid) -%}
+    card_gist(alt, "rindeal", gistid)
+{%- endmacro -%}
 
 {%- macro card_github(user, repo) -%}
     {% set alt  = "GitHub Repository {}/{}".format(user, repo) %}
@@ -45,6 +48,9 @@
     {% set dark_src  = base_src ~ "&theme=dark" %}
 
     {{- link_w_picture(alt, href, light_src, dark_src) -}}
+{%- endmacro -%}
+{%- macro my_card_github(repo) -%}
+    card_github("rindeal", repo)
 {%- endmacro -%}
 
 {%- macro shields_badge_url(badge, color="#", style='', ltext='', lcolor='', logo='', logo_color='', logo_size='', cache='') -%}
@@ -85,9 +91,11 @@
 
 {#- ------------------------------------------------------------------------------------------ -#}
 
-{{ card_gist("gsettings-array.py",           "rindeal", "c5786254410028f760ee2351d884a744") }}
-{{ card_gist("xkb-list-layouts-variants.sh", "rindeal", "1891455c258b22f3e31e1da8f9821c28") }}
-{{ card_github("rindeal", "Amalgamate") }}
+{{ my_card_gist("gsettings-array.py",           "c5786254410028f760ee2351d884a744") }}
+{{ my_card_gist("xkb-list-layouts-variants.sh", "1891455c258b22f3e31e1da8f9821c28") }}
+{{ my_card_github("Amalgamate") }}
+{{ my_card_github("xxHashish") }}
+{{ my_card_github("action-git-config-user") }}
 
 ---
 
