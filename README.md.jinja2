@@ -37,7 +37,7 @@
     {{- link_w_picture(alt, href, light_src, dark_src) -}}
 {%- endmacro -%}
 {%- macro my_card_gist(alt, gistid) -%}
-    card_gist(alt, "rindeal", gistid)
+    {{ card_gist(alt, "rindeal", gistid) }}
 {%- endmacro -%}
 
 {%- macro card_github(user, repo) -%}
@@ -50,7 +50,7 @@
     {{- link_w_picture(alt, href, light_src, dark_src) -}}
 {%- endmacro -%}
 {%- macro my_card_github(repo) -%}
-    card_github("rindeal", repo)
+    {{ card_github("rindeal", repo) }}
 {%- endmacro -%}
 
 {%- macro shields_badge_url(badge, color="#", style='', ltext='', lcolor='', logo='', logo_color='', logo_size='', cache='') -%}

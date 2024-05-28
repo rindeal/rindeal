@@ -37,6 +37,32 @@
     <img />
   </picture>
 </a>
+<a alt="GitHub Repository rindeal/xxHashish" href="https://github.com/rindeal/xxHashish">
+  <picture>
+    <source
+      srcset="https://github-readme-stats.vercel.app/api/pin?username=rindeal&repo=xxHashish&border_radius=20&cache_seconds=86400&theme=dark"
+      media="(prefers-color-scheme: dark)"
+    />
+    <source
+      srcset="https://github-readme-stats.vercel.app/api/pin?username=rindeal&repo=xxHashish&border_radius=20&cache_seconds=86400&theme=light"
+      media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)"
+    />
+    <img />
+  </picture>
+</a>
+<a alt="GitHub Repository rindeal/action-git-config-user" href="https://github.com/rindeal/action-git-config-user">
+  <picture>
+    <source
+      srcset="https://github-readme-stats.vercel.app/api/pin?username=rindeal&repo=action-git-config-user&border_radius=20&cache_seconds=86400&theme=dark"
+      media="(prefers-color-scheme: dark)"
+    />
+    <source
+      srcset="https://github-readme-stats.vercel.app/api/pin?username=rindeal&repo=action-git-config-user&border_radius=20&cache_seconds=86400&theme=light"
+      media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)"
+    />
+    <img />
+  </picture>
+</a>
 
 ---
 
